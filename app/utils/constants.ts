@@ -16,7 +16,8 @@ export const IFRAME_CLAUDE_MODELS = {
 } as const;
 
 // Default model for iframe integration (can be changed via environment variable)
-export const DEFAULT_IFRAME_MODEL = (import.meta.env.VITE_DEFAULT_IFRAME_MODEL as keyof typeof IFRAME_CLAUDE_MODELS) || 'claude-3-5-sonnet-latest';
+export const DEFAULT_IFRAME_MODEL =
+  (import.meta.env.VITE_DEFAULT_IFRAME_MODEL as keyof typeof IFRAME_CLAUDE_MODELS) || 'claude-3-5-sonnet-latest';
 
 export const PROMPT_COOKIE_KEY = 'cachedPrompt';
 export const TOOL_EXECUTION_APPROVAL = {
