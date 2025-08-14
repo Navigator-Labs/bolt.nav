@@ -36,12 +36,14 @@ export function useIframeMessaging(options: UseIframeMessagingOptions = {}) {
   useEffect(() => {
     try {
       isIframe.current = window.self !== window.top;
+
       if (isIframe.current) {
         logger.info('Running in iframe mode');
+
         // Send ready message to parent
         window.parent.postMessage({ type: 'READY', timestamp: Date.now() }, '*');
       }
-    } catch (e) {
+    } catch {
       // If we can't access window.top, we're in an iframe with different origin
       isIframe.current = true;
       logger.info('Running in cross-origin iframe mode');
@@ -77,7 +79,7 @@ export function useIframeMessaging(options: UseIframeMessagingOptions = {}) {
       }
 
       const message = event.data as IframeMessage;
-      
+
       // Validate message structure
       if (!message || typeof message !== 'object' || !message.type) {
         return;
@@ -91,6 +93,7 @@ export function useIframeMessaging(options: UseIframeMessagingOptions = {}) {
             logger.info('Triggering app generation from iframe message');
             onGenerateApp(message.data);
           }
+
           break;
 
         case 'UPDATE_DATA':
@@ -98,6 +101,7 @@ export function useIframeMessaging(options: UseIframeMessagingOptions = {}) {
             logger.info('Updating data from iframe message');
             onUpdateData(message.data);
           }
+
           break;
 
         case 'UPDATE_CHAT':
@@ -105,6 +109,7 @@ export function useIframeMessaging(options: UseIframeMessagingOptions = {}) {
             logger.info('Updating chat from iframe message');
             onUpdateChat(message.data);
           }
+
           break;
 
         default:
@@ -113,6 +118,7 @@ export function useIframeMessaging(options: UseIframeMessagingOptions = {}) {
     };
 
     window.addEventListener('message', handleMessage);
+
     return () => window.removeEventListener('message', handleMessage);
   }, [onGenerateApp, onUpdateData, onUpdateChat, allowedOrigins, sendToParent]);
 

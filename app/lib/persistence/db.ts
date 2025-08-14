@@ -288,11 +288,7 @@ export async function updateChatDescription(db: IDBDatabase, id: string, descrip
   await setMessages(db, id, chat.messages, chat.urlId, description, chat.timestamp, chat.metadata);
 }
 
-export async function appendMessageToChat(
-  db: IDBDatabase,
-  id: string,
-  message: Message,
-): Promise<void> {
+export async function appendMessageToChat(db: IDBDatabase, id: string, message: Message): Promise<void> {
   const chat = await getMessages(db, id);
 
   if (!chat) {

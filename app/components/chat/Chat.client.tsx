@@ -242,60 +242,21 @@ export const ChatImpl = memo(
 
     // Iframe messaging integration
     const iframeMessagingRef = useRef<{ sendMessage?: typeof sendMessage }>({});
-    
+
     const { isIframe, sendToParent } = useIframeMessaging({
-      onGenerateApp: useCallback((data: any) => {
-        logger.info('Received generate app request from parent', data);
-        
-        // Build the prompt from document content
-        let promptText = data?.prompt || '';
-        if (data?.documentContent) {
-          promptText = `${data.documentContent}\n\n${promptText}`;
-        } else if (data?.document) {
-          promptText = `Based on this document: ${data.document}\n\n${promptText}`;
-        }
+      onGenerateApp: useCallback(
+        (data: any) => {
+          logger.info('Received generate app request from parent', data);
 
-        // Update API keys if provided
-        if (data?.apiKeys) {
-          setApiKeys(data.apiKeys);
-          Cookies.set('apiKeys', JSON.stringify(data.apiKeys), { expires: 30 });
-        }
+          // Build the prompt from document content
+          let promptText = data?.prompt || '';
 
-        // Update model and provider if provided
-        if (data?.model) {
-          handleModelChange(data.model);
-        }
-        if (data?.provider) {
-          const providerInfo = PROVIDER_LIST.find(p => p.name === data.provider);
-          if (providerInfo) {
-            handleProviderChange(providerInfo as ProviderInfo);
+          if (data?.documentContent) {
+            promptText = `${data.documentContent}\n\n${promptText}`;
+          } else if (data?.document) {
+            promptText = `Based on this document: ${data.document}\n\n${promptText}`;
           }
-        }
 
-        // Auto-start generation if requested
-        if (data?.autoStart && promptText) {
-          // Use the ref to call sendMessage after it's defined
-          setTimeout(() => {
-            if (iframeMessagingRef.current.sendMessage) {
-              iframeMessagingRef.current.sendMessage(new Event('submit') as any, promptText);
-            }
-          }, 100);
-        } else if (promptText) {
-          // Just set the input without sending
-          setInput(promptText);
-        }
-      }, [handleModelChange, handleProviderChange]),
-      onUpdateData: useCallback((data: any) => {
-        logger.info('Received data update from parent', data);
-        // Handle any other data updates here
-      }, []),
-      onUpdateChat: useCallback(async (data: any) => {
-        logger.info('Received update chat request from parent', data);
-        
-        // Check if we have instructions to add
-        if (data?.instructions) {
-          const instructionsText = data.instructions;
-          
           // Update API keys if provided
           if (data?.apiKeys) {
             setApiKeys(data.apiKeys);
@@ -306,48 +267,99 @@ export const ChatImpl = memo(
           if (data?.model) {
             handleModelChange(data.model);
           }
+
           if (data?.provider) {
-            const providerInfo = PROVIDER_LIST.find(p => p.name === data.provider);
+            const providerInfo = PROVIDER_LIST.find((p) => p.name === data.provider);
+
             if (providerInfo) {
               handleProviderChange(providerInfo as ProviderInfo);
             }
           }
 
-          // If we have a specific chatId, try to load that chat first
-          if (data?.chatId && db) {
-            try {
-              const { getMessages } = await import('~/lib/persistence/db');
-              const chat = await getMessages(db, data.chatId);
-              
-              if (chat && chat.messages) {
-                // Load the existing chat messages
-                setMessages(chat.messages);
-                setChatStarted(true);
-                chatStore.setKey('started', true);
-                
-                // Wait a bit for the messages to load
-                await new Promise(resolve => setTimeout(resolve, 200));
-              }
-            } catch (error) {
-              logger.error('Failed to load chat', error);
-              toast.error('Failed to load the specified chat');
-            }
-          }
-
-          // Append the new instructions as a message
-          if (data?.autoStart) {
-            // Auto-send the instructions
+          // Auto-start generation if requested
+          if (data?.autoStart && promptText) {
+            // Use the ref to call sendMessage after it's defined
             setTimeout(() => {
               if (iframeMessagingRef.current.sendMessage) {
-                iframeMessagingRef.current.sendMessage(new Event('submit') as any, instructionsText);
+                iframeMessagingRef.current.sendMessage(new Event('submit') as any, promptText);
               }
             }, 100);
-          } else {
+          } else if (promptText) {
             // Just set the input without sending
-            setInput(instructionsText);
+            setInput(promptText);
           }
-        }
-      }, [handleModelChange, handleProviderChange, setMessages]),
+        },
+        [handleModelChange, handleProviderChange],
+      ),
+      onUpdateData: useCallback((data: any) => {
+        logger.info('Received data update from parent', data);
+
+        // Handle any other data updates here
+      }, []),
+      onUpdateChat: useCallback(
+        async (data: any) => {
+          logger.info('Received update chat request from parent', data);
+
+          // Check if we have instructions to add
+          if (data?.instructions) {
+            const instructionsText = data.instructions;
+
+            // Update API keys if provided
+            if (data?.apiKeys) {
+              setApiKeys(data.apiKeys);
+              Cookies.set('apiKeys', JSON.stringify(data.apiKeys), { expires: 30 });
+            }
+
+            // Update model and provider if provided
+            if (data?.model) {
+              handleModelChange(data.model);
+            }
+
+            if (data?.provider) {
+              const providerInfo = PROVIDER_LIST.find((p) => p.name === data.provider);
+
+              if (providerInfo) {
+                handleProviderChange(providerInfo as ProviderInfo);
+              }
+            }
+
+            // If we have a specific chatId, try to load that chat first
+            if (data?.chatId && db) {
+              try {
+                const { getMessages } = await import('~/lib/persistence/db');
+                const chat = await getMessages(db, data.chatId);
+
+                if (chat && chat.messages) {
+                  // Load the existing chat messages
+                  setMessages(chat.messages);
+                  setChatStarted(true);
+                  chatStore.setKey('started', true);
+
+                  // Wait a bit for the messages to load
+                  await new Promise((resolve) => setTimeout(resolve, 200));
+                }
+              } catch (error) {
+                logger.error('Failed to load chat', error);
+                toast.error('Failed to load the specified chat');
+              }
+            }
+
+            // Append the new instructions as a message
+            if (data?.autoStart) {
+              // Auto-send the instructions
+              setTimeout(() => {
+                if (iframeMessagingRef.current.sendMessage) {
+                  iframeMessagingRef.current.sendMessage(new Event('submit') as any, instructionsText);
+                }
+              }, 100);
+            } else {
+              // Just set the input without sending
+              setInput(instructionsText);
+            }
+          }
+        },
+        [handleModelChange, handleProviderChange, setMessages],
+      ),
     });
 
     // Send status updates to parent when streaming state changes
