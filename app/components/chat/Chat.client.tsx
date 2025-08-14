@@ -8,7 +8,7 @@ import { useMessageParser, usePromptEnhancer, useShortcuts } from '~/lib/hooks';
 import { description, useChatHistory } from '~/lib/persistence';
 import { chatStore } from '~/lib/stores/chat';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROMPT_COOKIE_KEY, PROVIDER_LIST } from '~/utils/constants';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROMPT_COOKIE_KEY, PROVIDER_LIST, DEFAULT_IFRAME_MODEL, IFRAME_CLAUDE_MODELS } from '~/utils/constants';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { BaseChat } from './BaseChat';
@@ -265,7 +265,12 @@ export const ChatImpl = memo(
 
           // Update model and provider if provided
           if (data?.model) {
-            handleModelChange(data.model);
+            // If model is one of the switchable Claude models, use it; otherwise use default
+            const modelToUse = data.model in IFRAME_CLAUDE_MODELS ? data.model : DEFAULT_IFRAME_MODEL;
+            handleModelChange(modelToUse);
+          } else {
+            // No model specified, use the default iframe model
+            handleModelChange(DEFAULT_IFRAME_MODEL);
           }
 
           if (data?.provider) {
@@ -312,7 +317,12 @@ export const ChatImpl = memo(
 
             // Update model and provider if provided
             if (data?.model) {
-              handleModelChange(data.model);
+              // If model is one of the switchable Claude models, use it; otherwise use default
+              const modelToUse = data.model in IFRAME_CLAUDE_MODELS ? data.model : DEFAULT_IFRAME_MODEL;
+              handleModelChange(modelToUse);
+            } else {
+              // No model specified, use the default iframe model
+              handleModelChange(DEFAULT_IFRAME_MODEL);
             }
 
             if (data?.provider) {

@@ -7,6 +7,17 @@ export const MODIFICATIONS_TAG_NAME = 'bolt_file_modifications';
 export const MODEL_REGEX = /^\[Model: (.*?)\]\n\n/;
 export const PROVIDER_REGEX = /\[Provider: (.*?)\]\n\n/;
 export const DEFAULT_MODEL = 'claude-3-5-sonnet-latest';
+
+// Available Claude models for iframe integration
+export const IFRAME_CLAUDE_MODELS = {
+  'claude-opus-4-1-20250805': 'Claude Opus 4.1',
+  'claude-3-7-sonnet-20250219': 'Claude Sonnet 4',
+  'claude-3-5-sonnet-latest': 'Claude Sonnet 3.5',
+} as const;
+
+// Default model for iframe integration (can be changed via environment variable)
+export const DEFAULT_IFRAME_MODEL = (import.meta.env.VITE_DEFAULT_IFRAME_MODEL as keyof typeof IFRAME_CLAUDE_MODELS) || 'claude-3-5-sonnet-latest';
+
 export const PROMPT_COOKIE_KEY = 'cachedPrompt';
 export const TOOL_EXECUTION_APPROVAL = {
   APPROVE: 'Yes, approved.',
