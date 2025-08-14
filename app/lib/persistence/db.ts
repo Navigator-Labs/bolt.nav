@@ -288,6 +288,21 @@ export async function updateChatDescription(db: IDBDatabase, id: string, descrip
   await setMessages(db, id, chat.messages, chat.urlId, description, chat.timestamp, chat.metadata);
 }
 
+export async function appendMessageToChat(
+  db: IDBDatabase,
+  id: string,
+  message: Message,
+): Promise<void> {
+  const chat = await getMessages(db, id);
+
+  if (!chat) {
+    throw new Error('Chat not found');
+  }
+
+  const updatedMessages = [...chat.messages, message];
+  await setMessages(db, id, updatedMessages, chat.urlId, chat.description, chat.timestamp, chat.metadata);
+}
+
 export async function updateChatMetadata(
   db: IDBDatabase,
   id: string,

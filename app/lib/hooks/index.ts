@@ -7,3 +7,4 @@ export { default } from './useViewport';
 export { useFeatures } from './useFeatures';
 export { useNotifications } from './useNotifications';
 export { useConnectionStatus } from './useConnectionStatus';
+export { useIframeMessaging } from './useIframeMessaging';

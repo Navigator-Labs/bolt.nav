@@ -15,6 +15,7 @@ import { BaseChat } from './BaseChat';
 import Cookies from 'js-cookie';
 import { debounce } from '~/utils/debounce';
 import { useSettings } from '~/lib/hooks/useSettings';
+import { db } from '~/lib/persistence/useChatHistory';
 import type { ProviderInfo } from '~/types/model';
 import { useSearchParams } from '@remix-run/react';
 import { createSampler } from '~/utils/sampler';
@@ -28,6 +29,7 @@ import type { ElementInfo } from '~/components/workbench/Inspector';
 import type { TextUIPart, FileUIPart, Attachment } from '@ai-sdk/ui-utils';
 import { useMCPStore } from '~/lib/stores/mcp';
 import type { LlmErrorAlertType } from '~/types/actions';
+import { useIframeMessaging } from '~/lib/hooks/useIframeMessaging';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -226,6 +228,149 @@ export const ChatImpl = memo(
 
     const { enhancingPrompt, promptEnhanced, enhancePrompt, resetEnhancer } = usePromptEnhancer();
     const { parsedMessages, parseMessages } = useMessageParser();
+
+    // Define model and provider change handlers
+    const handleModelChange = useCallback((newModel: string) => {
+      setModel(newModel);
+      Cookies.set('selectedModel', newModel, { expires: 30 });
+    }, []);
+
+    const handleProviderChange = useCallback((newProvider: ProviderInfo) => {
+      setProvider(newProvider);
+      Cookies.set('selectedProvider', newProvider.name, { expires: 30 });
+    }, []);
+
+    // Iframe messaging integration
+    const iframeMessagingRef = useRef<{ sendMessage?: typeof sendMessage }>({});
+    
+    const { isIframe, sendToParent } = useIframeMessaging({
+      onGenerateApp: useCallback((data: any) => {
+        logger.info('Received generate app request from parent', data);
+        
+        // Build the prompt from document content
+        let promptText = data?.prompt || '';
+        if (data?.documentContent) {
+          promptText = `${data.documentContent}\n\n${promptText}`;
+        } else if (data?.document) {
+          promptText = `Based on this document: ${data.document}\n\n${promptText}`;
+        }
+
+        // Update API keys if provided
+        if (data?.apiKeys) {
+          setApiKeys(data.apiKeys);
+          Cookies.set('apiKeys', JSON.stringify(data.apiKeys), { expires: 30 });
+        }
+
+        // Update model and provider if provided
+        if (data?.model) {
+          handleModelChange(data.model);
+        }
+        if (data?.provider) {
+          const providerInfo = PROVIDER_LIST.find(p => p.name === data.provider);
+          if (providerInfo) {
+            handleProviderChange(providerInfo as ProviderInfo);
+          }
+        }
+
+        // Auto-start generation if requested
+        if (data?.autoStart && promptText) {
+          // Use the ref to call sendMessage after it's defined
+          setTimeout(() => {
+            if (iframeMessagingRef.current.sendMessage) {
+              iframeMessagingRef.current.sendMessage(new Event('submit') as any, promptText);
+            }
+          }, 100);
+        } else if (promptText) {
+          // Just set the input without sending
+          setInput(promptText);
+        }
+      }, [handleModelChange, handleProviderChange]),
+      onUpdateData: useCallback((data: any) => {
+        logger.info('Received data update from parent', data);
+        // Handle any other data updates here
+      }, []),
+      onUpdateChat: useCallback(async (data: any) => {
+        logger.info('Received update chat request from parent', data);
+        
+        // Check if we have instructions to add
+        if (data?.instructions) {
+          const instructionsText = data.instructions;
+          
+          // Update API keys if provided
+          if (data?.apiKeys) {
+            setApiKeys(data.apiKeys);
+            Cookies.set('apiKeys', JSON.stringify(data.apiKeys), { expires: 30 });
+          }
+
+          // Update model and provider if provided
+          if (data?.model) {
+            handleModelChange(data.model);
+          }
+          if (data?.provider) {
+            const providerInfo = PROVIDER_LIST.find(p => p.name === data.provider);
+            if (providerInfo) {
+              handleProviderChange(providerInfo as ProviderInfo);
+            }
+          }
+
+          // If we have a specific chatId, try to load that chat first
+          if (data?.chatId && db) {
+            try {
+              const { getMessages } = await import('~/lib/persistence/db');
+              const chat = await getMessages(db, data.chatId);
+              
+              if (chat && chat.messages) {
+                // Load the existing chat messages
+                setMessages(chat.messages);
+                setChatStarted(true);
+                chatStore.setKey('started', true);
+                
+                // Wait a bit for the messages to load
+                await new Promise(resolve => setTimeout(resolve, 200));
+              }
+            } catch (error) {
+              logger.error('Failed to load chat', error);
+              toast.error('Failed to load the specified chat');
+            }
+          }
+
+          // Append the new instructions as a message
+          if (data?.autoStart) {
+            // Auto-send the instructions
+            setTimeout(() => {
+              if (iframeMessagingRef.current.sendMessage) {
+                iframeMessagingRef.current.sendMessage(new Event('submit') as any, instructionsText);
+              }
+            }, 100);
+          } else {
+            // Just set the input without sending
+            setInput(instructionsText);
+          }
+        }
+      }, [handleModelChange, handleProviderChange, setMessages]),
+    });
+
+    // Send status updates to parent when streaming state changes
+    useEffect(() => {
+      if (isIframe) {
+        sendToParent({
+          type: 'STATUS',
+          status: isLoading ? 'generating' : messages.length > 0 ? 'complete' : 'idle',
+          timestamp: Date.now(),
+        });
+      }
+    }, [isLoading, messages.length, isIframe, sendToParent]);
+
+    // Send error status to parent when API errors occur
+    useEffect(() => {
+      if (isIframe && error) {
+        sendToParent({
+          type: 'STATUS',
+          status: 'error',
+          timestamp: Date.now(),
+        });
+      }
+    }, [error, isIframe, sendToParent]);
 
     const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
 
@@ -617,15 +762,10 @@ export const ChatImpl = memo(
       }
     }, []);
 
-    const handleModelChange = (newModel: string) => {
-      setModel(newModel);
-      Cookies.set('selectedModel', newModel, { expires: 30 });
-    };
-
-    const handleProviderChange = (newProvider: ProviderInfo) => {
-      setProvider(newProvider);
-      Cookies.set('selectedProvider', newProvider.name, { expires: 30 });
-    };
+    // Store sendMessage in ref for iframe messaging
+    useEffect(() => {
+      iframeMessagingRef.current.sendMessage = sendMessage;
+    }, [sendMessage]);
 
     return (
       <BaseChat

@@ -16,6 +16,24 @@ export default defineConfig((config) => {
     build: {
       target: 'esnext',
     },
+    server: {
+      // HTTPS configuration - uncomment and set paths after generating certificates
+      // https: {
+      //   key: './localhost-key.pem',
+      //   cert: './localhost.pem',
+      // },
+      headers: {
+        // Required for WebContainers (terminal functionality)
+        // Using credentialless mode to match WebContainer config
+        'Cross-Origin-Embedder-Policy': 'credentialless',
+        'Cross-Origin-Opener-Policy': 'same-origin',
+        'Cross-Origin-Resource-Policy': 'cross-origin',
+        
+        // Allow iframe embedding
+        'X-Frame-Options': 'ALLOWALL',
+        'Content-Security-Policy': "frame-ancestors *",
+      },
+    },
     plugins: [
       nodePolyfills({
         include: ['buffer', 'process', 'util', 'stream'],
