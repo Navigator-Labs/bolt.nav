@@ -11,7 +11,7 @@ export const DEFAULT_MODEL = 'claude-3-5-sonnet-latest';
 // Available Claude models for iframe integration
 export const IFRAME_CLAUDE_MODELS = {
   'claude-opus-4-1-20250805': 'Claude Opus 4.1',
-  'claude-3-7-sonnet-20250219': 'Claude Sonnet 4',
+  'claude-sonnet-4-20250514': 'Claude Sonnet 4',
   'claude-3-5-sonnet-latest': 'Claude Sonnet 3.5',
 } as const;
 
