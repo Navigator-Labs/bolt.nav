@@ -1,0 +1,89 @@
+creationTimestamp: '2025-01-16T13:33:59.593-08:00'
+defaultService: https://www.googleapis.com/compute/v1/projects/navlabs-ai/global/backendServices/nl-ai-owl-neg
+fingerprint: oFrRtcK6u4E=
+hostRules:
+- hosts:
+  - athena.navlabs.ai
+  pathMatcher: athena-path-matcher
+- hosts:
+  - owl.navlabs.ai
+  pathMatcher: path-matcher-1
+- hosts:
+  - athena-dev.navlabs.ai
+  pathMatcher: path-matcher-2
+- hosts:
+  - poppy.navlabs.ai
+  pathMatcher: poppy-path-matcher
+- hosts:
+  - vero.navlabs.ai
+  pathMatcher: vero-path-matcher
+id: 9043385014445983145
+kind: compute#urlMap
+name: nl-ai-galb
+pathMatchers:
+- defaultService: https://www.googleapis.com/compute/v1/projects/navlabs-ai/global/backendServices/athena-api-backend
+  name: athena-path-matcher
+  pathRules:
+  - paths:
+    - /docs
+    - /docs/*
+    - /openapi.json
+    service: https://www.googleapis.com/compute/v1/projects/navlabs-ai/global/backendServices/athena-docs-backend
+- defaultService: https://www.googleapis.com/compute/v1/projects/navlabs-ai/global/backendServices/nl-ai-owl-neg
+  name: path-matcher-1
+- defaultService: https://www.googleapis.com/compute/v1/projects/navlabs-ai/global/backendServices/athena-api-dev-backend
+  name: path-matcher-2
+  pathRules:
+  - paths:
+    - /docs
+    - /docs/*
+    - /openapi.json
+    service: https://www.googleapis.com/compute/v1/projects/navlabs-ai/global/backendServices/athena-docs-dev-backend
+- defaultService: https://www.googleapis.com/compute/v1/projects/navlabs-ai/global/backendServices/poppy-delivery-backend
+  name: poppy-path-matcher
+  routeRules:
+  - matchRules:
+    - prefixMatch: /api
+    priority: 1
+    routeAction:
+      urlRewrite:
+        pathPrefixRewrite: /
+    service: https://www.googleapis.com/compute/v1/projects/navlabs-ai/global/backendServices/minerva-api-backend
+  - matchRules:
+    - prefixMatch: /assets
+    - prefixMatch: /favicon.ico
+    - prefixMatch: /robots.txt
+    priority: 2
+    service: https://www.googleapis.com/compute/v1/projects/navlabs-ai/global/backendServices/poppy-delivery-backend
+  - matchRules:
+    - pathTemplateMatch: /**
+    - pathTemplateMatch: /
+    priority: 3
+    routeAction:
+      urlRewrite:
+        pathTemplateRewrite: /index.html
+    service: https://www.googleapis.com/compute/v1/projects/navlabs-ai/global/backendServices/poppy-delivery-backend
+- defaultService: https://www.googleapis.com/compute/v1/projects/navlabs-ai/global/backendServices/bolt-nav-backend
+  name: vero-path-matcher
+  routeRules:
+  - matchRules:
+    - prefixMatch: /vero/
+    priority: 1
+    routeAction:
+      urlRewrite:
+        pathPrefixRewrite: /
+    service: https://www.googleapis.com/compute/v1/projects/navlabs-ai/global/backendServices/vero-demo-backend
+selfLink: https://www.googleapis.com/compute/v1/projects/navlabs-ai/global/urlMaps/nl-ai-galb
+tests:
+- description: ''
+  host: athena-dev.navlabs.ai
+  path: /docs
+  service: projects/navlabs-ai/global/backendServices/athena-docs-dev-backend
+- description: ''
+  host: athena.navlabs.ai
+  path: /openapi.json
+  service: projects/navlabs-ai/global/backendServices/athena-docs-backend
+- description: ''
+  host: athena.navlabs.ai
+  path: /vision-generator/
+  service: projects/navlabs-ai/global/backendServices/athena-api-backend
