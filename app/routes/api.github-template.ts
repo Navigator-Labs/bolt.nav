@@ -129,7 +129,7 @@ async function fetchRepoContentsZip(repo: string, githubToken?: string) {
     headers: {
       Accept: 'application/vnd.github.v3+json',
       'User-Agent': 'bolt.diy-app',
-      ...(githubToken ? { Authorization: `Bearer ${githubToken}` } : {}),
+       ...(githubToken ? { Authorization: `Bearer ${githubToken}` } : {}),
     },
   });
 
@@ -143,6 +143,8 @@ async function fetchRepoContentsZip(repo: string, githubToken?: string) {
   // Fetch the zipball
   const zipResponse = await fetch(zipballUrl, {
     headers: {
+      Accept: 'application/vnd.github.v3+json',
+      'User-Agent': 'bolt.diy-app',
       ...(githubToken ? { Authorization: `Bearer ${githubToken}` } : {}),
     },
   });
