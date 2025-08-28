@@ -12,8 +12,8 @@ export async function action({ request }: ActionFunctionArgs) {
       return Response.json({ error: 'Invalid MCP servers configuration' }, { status: 400 });
     }
 
-    const mcpService = MCPService.getInstance();
-    const serverTools = await mcpService.updateConfig(mcpConfig);
+    // Update the global configuration (this caches the tools)
+    const serverTools = await MCPService.updateGlobalConfig(mcpConfig);
 
     return Response.json(serverTools);
   } catch (error) {

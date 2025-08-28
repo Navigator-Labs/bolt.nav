@@ -73,9 +73,11 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
   };
   const encoder: TextEncoder = new TextEncoder();
   let progressCounter: number = 1;
+  
+  // Create a request-scoped MCP service instance
+  const mcpService = MCPService.createRequestInstance();
 
   try {
-    const mcpService = MCPService.getInstance();
     const totalMessageContent = messages.reduce((acc, message) => acc + message.content, '');
     logger.debug(`Total message length: ${totalMessageContent.split(' ').length}, words`);
 
@@ -234,6 +236,13 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               } satisfies ProgressAnnotation);
               await new Promise((resolve) => setTimeout(resolve, 0));
 
+              // Clean up MCP clients when stream finishes
+              try {
+                await mcpService.cleanup();
+              } catch (cleanupError) {
+                logger.error('Error cleaning up MCP service:', cleanupError);
+              }
+
               // stream.close();
               return;
             }
@@ -374,6 +383,13 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     });
   } catch (error: any) {
     logger.error(error);
+
+    // Clean up MCP clients on error
+    try {
+      await mcpService.cleanup();
+    } catch (cleanupError) {
+      logger.error('Error cleaning up MCP service:', cleanupError);
+    }
 
     const errorResponse = {
       error: true,

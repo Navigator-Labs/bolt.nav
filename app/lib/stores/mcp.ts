@@ -47,16 +47,35 @@ export const useMCPStore = create<Store & Actions>((set, get) => ({
       if (savedConfig) {
         try {
           const settings = JSON.parse(savedConfig) as MCPSettings;
-          const serverTools = await updateServerConfig(settings.mcpConfig);
-          set(() => ({ settings, serverTools }));
+          // Only try to update server config if there are actually servers configured
+          if (settings.mcpConfig && Object.keys(settings.mcpConfig.mcpServers || {}).length > 0) {
+            try {
+              const serverTools = await updateServerConfig(settings.mcpConfig);
+              set(() => ({ settings, serverTools, error: null }));
+            } catch (error) {
+              console.error('Error updating server config during initialization:', error);
+              // Still set the settings even if server update fails
+              set(() => ({ 
+                settings, 
+                serverTools: {},
+                error: `Failed to initialize servers: ${error instanceof Error ? error.message : String(error)}` 
+              }));
+            }
+          } else {
+            // No servers configured, just set the settings
+            set(() => ({ settings, serverTools: {}, error: null }));
+          }
         } catch (error) {
           console.error('Error parsing saved mcp config:', error);
           set(() => ({
+            settings: defaultSettings,
+            serverTools: {},
             error: `Error parsing saved mcp config: ${error instanceof Error ? error.message : String(error)}`,
           }));
         }
       } else {
         localStorage.setItem(MCP_SETTINGS_KEY, JSON.stringify(defaultSettings));
+        set(() => ({ settings: defaultSettings, serverTools: {}, error: null }));
       }
     }
 

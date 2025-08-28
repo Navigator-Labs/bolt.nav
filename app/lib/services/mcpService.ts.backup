@@ -103,13 +103,14 @@ export type MCPServer = MCPServerAvailable | MCPServerUnavailable;
 
 // Global configuration cache (read-only after initialization)
 let globalConfig: MCPConfig | null = null;
-let globalMetadataCache: {
+let globalToolsCache: {
+  tools: ToolSet;
   toolsWithoutExecute: ToolSet;
   toolNamesToServerNames: Map<string, string>;
   mcpToolsPerServer: MCPServerTools;
 } | null = null;
-// Note: We don't cache clients globally in Cloudflare Workers
-// due to I/O isolation between requests
+// Keep global clients alive for tool execution
+let globalClients: MCPClient[] = [];
 
 export class MCPService {
   private _tools: ToolSet = {};
@@ -120,43 +121,57 @@ export class MCPService {
     mcpServers: {},
   };
   private _clients: MCPClient[] = [];
-  private _forceCreateClients: boolean = false;
-  private _lazyClients = new Map<string, MCPClient>();
 
   constructor(config?: MCPConfig) {
     if (config) {
       this._config = config;
     } else if (globalConfig) {
       this._config = globalConfig;
-      // Use cached metadata if available
-      if (globalMetadataCache) {
-        this._toolsWithoutExecute = { ...globalMetadataCache.toolsWithoutExecute };
-        this._toolNamesToServerNames = new Map(globalMetadataCache.toolNamesToServerNames);
-        this._mcpToolsPerServer = { ...globalMetadataCache.mcpToolsPerServer };
-        // Note: _tools will be populated lazily when needed
+      // Use cached tools if available
+      if (globalToolsCache) {
+        this._tools = { ...globalToolsCache.tools };
+        this._toolsWithoutExecute = { ...globalToolsCache.toolsWithoutExecute };
+        this._toolNamesToServerNames = new Map(globalToolsCache.toolNamesToServerNames);
+        this._mcpToolsPerServer = { ...globalToolsCache.mcpToolsPerServer };
       }
     }
   }
 
   // Static method to update global configuration (called once at startup)
   static async updateGlobalConfig(config: MCPConfig): Promise<MCPServerTools> {
+    // Close any existing global clients before creating new ones
+    await MCPService.closeGlobalClients();
+    
     globalConfig = config;
     const service = new MCPService(config);
-    service._forceCreateClients = true; // Force creation for metadata extraction
     await service._createClients();
     
-    // Cache only the metadata (not the clients with I/O objects)
-    globalMetadataCache = {
+    // Cache the tools globally
+    globalToolsCache = {
+      tools: { ...service._tools },
       toolsWithoutExecute: { ...service._toolsWithoutExecute },
       toolNamesToServerNames: new Map(service._toolNamesToServerNames),
       mcpToolsPerServer: { ...service._mcpToolsPerServer },
     };
     
-    // Close the clients after extracting metadata
-    // In Cloudflare, each request will create its own clients
-    await service._closeClients();
+    // Keep the clients alive globally for tool execution
+    globalClients = [...service._clients];
     
-    return globalMetadataCache.mcpToolsPerServer;
+    return globalToolsCache.mcpToolsPerServer;
+  }
+
+  // Static method to properly close global clients
+  static async closeGlobalClients(): Promise<void> {
+    const closePromises = globalClients.map(async (client) => {
+      try {
+        await client.close();
+      } catch (error) {
+        logger.error(`Error closing global client:`, error);
+      }
+    });
+    
+    await Promise.allSettled(closePromises);
+    globalClients = [];
   }
 
   // Create a request-scoped instance
@@ -290,9 +305,12 @@ export class MCPService {
   private async _createClients() {
     await this._closeClients();
 
-    // Skip client creation if we're using cached metadata
-    // Clients will be created lazily when tools are executed
-    if (globalMetadataCache && this._config === globalConfig && !this._forceCreateClients) {
+    // If we have cached tools, reuse them instead of creating new clients
+    if (globalToolsCache && this._config === globalConfig) {
+      this._tools = { ...globalToolsCache.tools };
+      this._toolsWithoutExecute = { ...globalToolsCache.toolsWithoutExecute };
+      this._toolNamesToServerNames = new Map(globalToolsCache.toolNamesToServerNames);
+      this._mcpToolsPerServer = { ...globalToolsCache.mcpToolsPerServer };
       return;
     }
 
@@ -339,7 +357,7 @@ export class MCPService {
 
   async checkServersAvailabilities() {
     // For request-scoped instances, just return the cached state
-    if (globalMetadataCache && this._config === globalConfig) {
+    if (globalToolsCache && this._config === globalConfig) {
       return this._mcpToolsPerServer;
     }
 
@@ -408,22 +426,14 @@ export class MCPService {
 
     await Promise.allSettled(closePromises);
     this._clients = [];
-    this._lazyClients.clear();
     this._tools = {};
     this._toolsWithoutExecute = {};
     this._mcpToolsPerServer = {};
     this._toolNamesToServerNames.clear();
   }
 
-  // Public method to cleanup request-scoped resources
-  async cleanup(): Promise<void> {
-    logger.debug('Cleaning up request-scoped MCP clients');
-    await this._closeClients();
-  }
-
   isValidToolName(toolName: string): boolean {
-    // Check in toolsWithoutExecute since _tools might be empty for lazy-loaded clients
-    return toolName in this._toolsWithoutExecute || this._toolNamesToServerNames.has(toolName);
+    return toolName in this._tools;
   }
 
   processToolCall(toolCall: ToolCall, dataStream: DataStreamWriter): void {
@@ -445,40 +455,6 @@ export class MCPService {
     }
   }
 
-  private async _getOrCreateLazyClient(serverName: string): Promise<MCPClient | null> {
-    // Check if we already have a lazy client for this server
-    if (this._lazyClients.has(serverName)) {
-      return this._lazyClients.get(serverName)!;
-    }
-
-    const serverConfig = this._config.mcpServers[serverName];
-    if (!serverConfig) {
-      return null;
-    }
-
-    try {
-      logger.debug(`Creating lazy client for server "${serverName}"`);
-      const client = await this._createMCPClient(serverName, serverConfig);
-      this._lazyClients.set(serverName, client);
-      this._clients.push(client);
-      
-      // Get tools from the newly created client
-      const tools = await client.tools();
-      
-      // Update _tools with executable versions for this server
-      for (const [toolName, tool] of Object.entries(tools)) {
-        if (this._toolNamesToServerNames.get(toolName) === serverName) {
-          this._tools[toolName] = tool;
-        }
-      }
-      
-      return client;
-    } catch (error) {
-      logger.error(`Failed to create lazy client for server ${serverName}:`, error);
-      return null;
-    }
-  }
-
   async processToolInvocations(messages: Message[], dataStream: DataStreamWriter): Promise<Message[]> {
     const lastMessage = messages[messages.length - 1];
     const parts = lastMessage.parts;
@@ -497,56 +473,32 @@ export class MCPService {
         const { toolInvocation } = part;
         const { toolName, toolCallId } = toolInvocation;
 
-        // Skip if tool doesn't exist
-        if (!this.isValidToolName(toolName)) {
-          return part;
-        }
-
-        // Check if this is a tool call with an approval/rejection result
-        // The toolInvocation might have a result property when approved/rejected
-        const invocationResult = (toolInvocation as any).result;
-        
-        logger.debug(`Processing tool invocation for ${toolName}: state=${toolInvocation.state}, result=${invocationResult}`);
-        
-        // Only process if we have an approval/rejection result
-        if (!invocationResult) {
-          logger.debug(`Skipping tool ${toolName} - no result present`);
+        // return part as-is if tool does not exist, or if it's not a tool call result
+        if (!this.isValidToolName(toolName) || toolInvocation.state !== 'result') {
           return part;
         }
 
         let result;
 
-        if (invocationResult === TOOL_EXECUTION_APPROVAL.APPROVE) {
-          // For Cloudflare Workers: Create client lazily when tool needs to be executed
-          const serverName = this._toolNamesToServerNames.get(toolName);
-          logger.debug(`Tool ${toolName} approved, serverName: ${serverName}, has tool: ${!!this._tools[toolName]}`);
-          
-          if (serverName && !this._tools[toolName]) {
-            logger.debug(`Creating lazy client for server ${serverName}`);
-            await this._getOrCreateLazyClient(serverName);
-          }
-
+        if (toolInvocation.result === TOOL_EXECUTION_APPROVAL.APPROVE) {
           const toolInstance = this._tools[toolName];
-          logger.debug(`Tool instance for ${toolName}: ${!!toolInstance}, has execute: ${toolInstance && typeof toolInstance.execute === 'function'}`);
 
           if (toolInstance && typeof toolInstance.execute === 'function') {
-            logger.debug(`Calling tool "${toolName}" with args: ${JSON.stringify(toolInvocation.args)}`);
+            logger.debug(`calling tool "${toolName}" with args: ${JSON.stringify(toolInvocation.args)}`);
 
             try {
               result = await toolInstance.execute(toolInvocation.args, {
                 messages: convertToCoreMessages(messages),
                 toolCallId,
               });
-              logger.debug(`Tool ${toolName} execution result:`, result);
             } catch (error) {
-              logger.error(`Error while calling tool "${toolName}":`, error);
+              logger.error(`error while calling tool "${toolName}":`, error);
               result = TOOL_EXECUTION_ERROR;
             }
           } else {
-            logger.warn(`Tool ${toolName} has no execute function`);
             result = TOOL_NO_EXECUTE_FUNCTION;
           }
-        } else if (invocationResult === TOOL_EXECUTION_APPROVAL.REJECT) {
+        } else if (toolInvocation.result === TOOL_EXECUTION_APPROVAL.REJECT) {
           result = TOOL_EXECUTION_DENIED;
         } else {
           // For any unhandled responses, return the original part.

@@ -5,7 +5,8 @@ const logger = createScopedLogger('api.mcp-check');
 
 export async function loader() {
   try {
-    const mcpService = MCPService.getInstance();
+    // Create a request-scoped MCP service instance
+    const mcpService = MCPService.createRequestInstance();
     const serverTools = await mcpService.checkServersAvailabilities();
 
     return Response.json(serverTools);
