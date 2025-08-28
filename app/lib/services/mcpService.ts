@@ -108,8 +108,11 @@ let globalMetadataCache: {
   toolNamesToServerNames: Map<string, string>;
   mcpToolsPerServer: MCPServerTools;
 } | null = null;
-// Note: We don't cache clients globally in Cloudflare Workers
-// due to I/O isolation between requests
+
+/*
+ * Note: We don't cache clients globally in Cloudflare Workers
+ * due to I/O isolation between requests
+ */
 
 export class MCPService {
   private _tools: ToolSet = {};
@@ -128,11 +131,13 @@ export class MCPService {
       this._config = config;
     } else if (globalConfig) {
       this._config = globalConfig;
+
       // Use cached metadata if available
       if (globalMetadataCache) {
         this._toolsWithoutExecute = { ...globalMetadataCache.toolsWithoutExecute };
         this._toolNamesToServerNames = new Map(globalMetadataCache.toolNamesToServerNames);
         this._mcpToolsPerServer = { ...globalMetadataCache.mcpToolsPerServer };
+
         // Note: _tools will be populated lazily when needed
       }
     }
@@ -141,21 +146,24 @@ export class MCPService {
   // Static method to update global configuration (called once at startup)
   static async updateGlobalConfig(config: MCPConfig): Promise<MCPServerTools> {
     globalConfig = config;
+
     const service = new MCPService(config);
     service._forceCreateClients = true; // Force creation for metadata extraction
     await service._createClients();
-    
+
     // Cache only the metadata (not the clients with I/O objects)
     globalMetadataCache = {
       toolsWithoutExecute: { ...service._toolsWithoutExecute },
       toolNamesToServerNames: new Map(service._toolNamesToServerNames),
       mcpToolsPerServer: { ...service._mcpToolsPerServer },
     };
-    
-    // Close the clients after extracting metadata
-    // In Cloudflare, each request will create its own clients
+
+    /*
+     * Close the clients after extracting metadata
+     * In Cloudflare, each request will create its own clients
+     */
     await service._closeClients();
-    
+
     return globalMetadataCache.mcpToolsPerServer;
   }
 
@@ -245,8 +253,10 @@ export class MCPService {
       `Creating STDIO client for '${serverName}' with command: '${config.command}' ${config.args?.join(' ') || ''}`,
     );
 
-    // Note: STDIO transport won't work in Cloudflare Workers environment
-    // This should only be used in Node.js environments
+    /*
+     * Note: STDIO transport won't work in Cloudflare Workers environment
+     * This should only be used in Node.js environments
+     */
     const client = await experimental_createMCPClient({ transport: new Experimental_StdioMCPTransport(config) });
 
     return Object.assign(client, { serverName });
@@ -290,8 +300,10 @@ export class MCPService {
   private async _createClients() {
     await this._closeClients();
 
-    // Skip client creation if we're using cached metadata
-    // Clients will be created lazily when tools are executed
+    /*
+     * Skip client creation if we're using cached metadata
+     * Clients will be created lazily when tools are executed
+     */
     if (globalMetadataCache && this._config === globalConfig && !this._forceCreateClients) {
       return;
     }
@@ -452,26 +464,28 @@ export class MCPService {
     }
 
     const serverConfig = this._config.mcpServers[serverName];
+
     if (!serverConfig) {
       return null;
     }
 
     try {
       logger.debug(`Creating lazy client for server "${serverName}"`);
+
       const client = await this._createMCPClient(serverName, serverConfig);
       this._lazyClients.set(serverName, client);
       this._clients.push(client);
-      
+
       // Get tools from the newly created client
       const tools = await client.tools();
-      
+
       // Update _tools with executable versions for this server
       for (const [toolName, tool] of Object.entries(tools)) {
         if (this._toolNamesToServerNames.get(toolName) === serverName) {
           this._tools[toolName] = tool;
         }
       }
-      
+
       return client;
     } catch (error) {
       logger.error(`Failed to create lazy client for server ${serverName}:`, error);
@@ -502,12 +516,16 @@ export class MCPService {
           return part;
         }
 
-        // Check if this is a tool call with an approval/rejection result
-        // The toolInvocation might have a result property when approved/rejected
+        /*
+         * Check if this is a tool call with an approval/rejection result
+         * The toolInvocation might have a result property when approved/rejected
+         */
         const invocationResult = (toolInvocation as any).result;
-        
-        logger.debug(`Processing tool invocation for ${toolName}: state=${toolInvocation.state}, result=${invocationResult}`);
-        
+
+        logger.debug(
+          `Processing tool invocation for ${toolName}: state=${toolInvocation.state}, result=${invocationResult}`,
+        );
+
         // Only process if we have an approval/rejection result
         if (!invocationResult) {
           logger.debug(`Skipping tool ${toolName} - no result present`);
@@ -520,14 +538,16 @@ export class MCPService {
           // For Cloudflare Workers: Create client lazily when tool needs to be executed
           const serverName = this._toolNamesToServerNames.get(toolName);
           logger.debug(`Tool ${toolName} approved, serverName: ${serverName}, has tool: ${!!this._tools[toolName]}`);
-          
+
           if (serverName && !this._tools[toolName]) {
             logger.debug(`Creating lazy client for server ${serverName}`);
             await this._getOrCreateLazyClient(serverName);
           }
 
           const toolInstance = this._tools[toolName];
-          logger.debug(`Tool instance for ${toolName}: ${!!toolInstance}, has execute: ${toolInstance && typeof toolInstance.execute === 'function'}`);
+          logger.debug(
+            `Tool instance for ${toolName}: ${!!toolInstance}, has execute: ${toolInstance && typeof toolInstance.execute === 'function'}`,
+          );
 
           if (toolInstance && typeof toolInstance.execute === 'function') {
             logger.debug(`Calling tool "${toolName}" with args: ${JSON.stringify(toolInvocation.args)}`);

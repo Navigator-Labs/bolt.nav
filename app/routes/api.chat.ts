@@ -73,7 +73,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
   };
   const encoder: TextEncoder = new TextEncoder();
   let progressCounter: number = 1;
-  
+
   // Create a request-scoped MCP service instance
   const mcpService = MCPService.createRequestInstance();
 
