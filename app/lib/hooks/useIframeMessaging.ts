@@ -1,5 +1,6 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { logger } from '~/utils/logger';
+import type { DesignScheme } from '~/types/design-scheme';
 
 export interface IframeMessage {
   type: 'GENERATE_APP' | 'UPDATE_DATA' | 'UPDATE_CHAT' | 'READY' | 'STATUS';
@@ -14,6 +15,7 @@ export interface IframeMessage {
     autoStart?: boolean; // Auto-start generation when data is received
     chatId?: string; // ID of chat to update
     instructions?: string; // Additional instructions to append to chat
+    designScheme?: DesignScheme; // Design preferences for the app generation
   };
   status?: 'idle' | 'generating' | 'complete' | 'error';
   timestamp?: number;

@@ -270,6 +270,12 @@ export const ChatImpl = memo(
             Cookies.set('apiKeys', JSON.stringify(data.apiKeys), { expires: 30 });
           }
 
+          // Update design scheme if provided
+          if (data?.designScheme) {
+            logger.info('Updating design scheme from iframe message', data.designScheme);
+            setDesignScheme(data.designScheme);
+          }
+
           // Update model and provider if provided
           if (data?.model) {
             // If model is one of the switchable Claude models, use it; otherwise use default
@@ -301,7 +307,7 @@ export const ChatImpl = memo(
             setInput(promptText);
           }
         },
-        [handleModelChange, handleProviderChange],
+        [handleModelChange, handleProviderChange, setDesignScheme],
       ),
       onUpdateData: useCallback((data: any) => {
         logger.info('Received data update from parent', data);
@@ -320,6 +326,12 @@ export const ChatImpl = memo(
             if (data?.apiKeys) {
               setApiKeys(data.apiKeys);
               Cookies.set('apiKeys', JSON.stringify(data.apiKeys), { expires: 30 });
+            }
+
+            // Update design scheme if provided
+            if (data?.designScheme) {
+              logger.info('Updating design scheme from UPDATE_CHAT message', data.designScheme);
+              setDesignScheme(data.designScheme);
             }
 
             // Update model and provider if provided
@@ -375,7 +387,7 @@ export const ChatImpl = memo(
             }
           }
         },
-        [handleModelChange, handleProviderChange, setMessages],
+        [handleModelChange, handleProviderChange, setMessages, setDesignScheme],
       ),
     });
 
