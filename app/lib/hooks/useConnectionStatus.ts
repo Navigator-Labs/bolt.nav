@@ -37,10 +37,10 @@ export const useConnectionStatus = () => {
   };
 
   useEffect(() => {
-    // Check immediately and then every 10 seconds
+    // Check immediately and then every 30 seconds (reduced from 10 to prevent connection pooling issues)
     checkStatus();
 
-    const interval = setInterval(checkStatus, 10 * 1000);
+    const interval = setInterval(checkStatus, 30 * 1000);
 
     return () => clearInterval(interval);
   }, [acknowledgedIssue]);

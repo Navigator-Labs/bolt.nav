@@ -30,10 +30,19 @@ export const checkConnection = async (): Promise<ConnectionStatus> => {
     for (const endpoint of endpoints) {
       try {
         const start = performance.now();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
         const response = await fetch(endpoint, {
           method: 'HEAD',
           cache: 'no-cache',
+          signal: controller.signal,
+          headers: {
+            'Connection': 'keep-alive',
+          },
         });
+
+        clearTimeout(timeoutId);
         const end = performance.now();
 
         if (response.ok) {
