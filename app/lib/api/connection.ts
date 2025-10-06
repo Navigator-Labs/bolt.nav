@@ -38,11 +38,12 @@ export const checkConnection = async (): Promise<ConnectionStatus> => {
           cache: 'no-cache',
           signal: controller.signal,
           headers: {
-            'Connection': 'keep-alive',
+            Connection: 'keep-alive',
           },
         });
 
         clearTimeout(timeoutId);
+
         const end = performance.now();
 
         if (response.ok) {
