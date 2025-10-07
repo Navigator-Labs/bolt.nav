@@ -5,7 +5,6 @@ import { classNames } from '~/utils/classNames';
 import { TabTile } from '~/components/@settings/shared/components/TabTile';
 import { useFeatures } from '~/lib/hooks/useFeatures';
 import { useNotifications } from '~/lib/hooks/useNotifications';
-import { useConnectionStatus } from '~/lib/hooks/useConnectionStatus';
 import { tabConfigurationStore, resetTabConfiguration } from '~/lib/stores/settings';
 import { profileStore } from '~/lib/stores/profile';
 import type { TabType, Profile } from './types';
@@ -54,7 +53,6 @@ export const ControlPanel = ({ open, onClose }: ControlPanelProps) => {
   // Status hooks
   const { hasNewFeatures, unviewedFeatures, acknowledgeAllFeatures } = useFeatures();
   const { hasUnreadNotifications, unreadNotifications, markAllAsRead } = useNotifications();
-  const { hasConnectionIssues, currentIssue, acknowledgeIssue } = useConnectionStatus();
 
   // Memoize the base tab configurations to avoid recalculation
   const baseTabConfig = useMemo(() => {
@@ -153,8 +151,6 @@ export const ControlPanel = ({ open, onClose }: ControlPanelProps) => {
         return hasNewFeatures;
       case 'notifications':
         return hasUnreadNotifications;
-      case 'connection':
-        return hasConnectionIssues;
       default:
         return false;
     }
@@ -166,12 +162,6 @@ export const ControlPanel = ({ open, onClose }: ControlPanelProps) => {
         return `${unviewedFeatures.length} new feature${unviewedFeatures.length === 1 ? '' : 's'} to explore`;
       case 'notifications':
         return `${unreadNotifications.length} unread notification${unreadNotifications.length === 1 ? '' : 's'}`;
-      case 'connection':
-        return currentIssue === 'disconnected'
-          ? 'Connection lost'
-          : currentIssue === 'high-latency'
-            ? 'High latency detected'
-            : 'Connection issues detected';
       default:
         return '';
     }
@@ -189,9 +179,6 @@ export const ControlPanel = ({ open, onClose }: ControlPanelProps) => {
         break;
       case 'notifications':
         markAllAsRead();
-        break;
-      case 'connection':
-        acknowledgeIssue();
         break;
     }
 
